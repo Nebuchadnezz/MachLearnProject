@@ -1,0 +1,109 @@
+---
+title: "MachLearnProj"
+author: "Corey Neff"
+date: "11/4/2020"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Packages
+
+Install packages I think we'll need.
+
+```{r}
+if (!require("librarian")) install.packages("librarian")
+library(librarian)
+shelf(caret, randomForest, rpart, ggplot2, dplyr)
+```
+
+## Download and read data
+
+Read csvs into R, making sure to specify NA strings from CSV file (found by opening in Excel). Also kept only compelte cases. We'll also get rid of the columns that are irrelevant (i.e. the ones dealing with time, etc.)
+
+```{r, warning=FALSE}
+set.seed(69)
+setwd('/users/coreyneff/downloads/')
+train_file <- download.file('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv',
+                            destfile = 'train.csv')
+test_file <- download.file('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv',
+                            destfile = 'test.csv')
+train <- read.csv('train.csv', na.strings = c('#DIV/0!', 'NA',''))
+test <- read.csv('test.csv', na.strings = c('#DIV/0!', 'NA', ''))
+train <-train[,colSums(is.na(train)) == 0]
+test <-test[,colSums(is.na(test)) == 0]
+train <- train[,-c(1:7)]
+test <- test[,-c(1:7)]
+train$classe <- as.factor(train$classe)
+```
+
+## Look at data
+
+Next we'll look at our training dataset
+
+```{r, eval=FALSE}
+summary(train)
+head(train)
+```
+
+## Partition data
+```{r}
+partition <- createDataPartition(train$classe, p=0.75, list=FALSE)
+train_train <- train[partition,] 
+train_test <- train[-partition,]
+```
+
+## First look
+
+According to the directions, "Classe" is the outcome variable, so let's see its distribution.
+
+```{r}
+train_train$classe <- as.factor(train_train$classe)
+ggplot(train_train) +
+      geom_bar(aes(classe), col="black", fill="darkgreen") +
+      xlab("Classe Levels")
+```
+
+## First go at a prediction model
+
+I like CART, personally, so I'm going to start there.
+
+```{r}
+train_cart <- rpart(classe ~., train_train, method = "class")
+cart_predict <- predict(train_cart, train_test, type = "class")
+confusion<- confusionMatrix(cart_predict,as.factor(train_test$classe))
+confusion
+```
+
+## Next is randomForest
+
+Next we should look at a randomForest model.
+
+```{r}
+train_forest <- randomForest(classe ~., train_train, method = "class")
+forest_predict <- predict(train_forest, train_test, method = "class")
+confusion2 <- confusionMatrix(forest_predict, as.factor(train_test$classe))
+confusion2
+
+```
+## Comparison
+
+Lets compare the accuracy of the two.
+
+```{r}
+list(CART = confusion$overall["Accuracy"],
+        randomForest = confusion2$overall["Accuracy"])
+```
+
+## Final verdict
+
+It seems like the randomForest model's preductive power is much higher, so let's use that. Here is our prediction for the test set.
+```{r}
+predict(train_forest, test, type = "class")
+```
+
+
